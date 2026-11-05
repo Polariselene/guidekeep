@@ -1,0 +1,9 @@
+interface:
+  display_name: "Guidekeep"
+  short_description: "Archive web guides with sources and confidence notes"
+  default_prompt: "用 $guide-keep 在线读取 https://rust-lang.org/tools/install/ 并存成可检索的攻略。"
+  # 深查证对话示例：用 $guide-keep --deep 存 https://rust-lang.org/tools/install/ 并查证关键步骤。
+
+# 技能无必需的固定 MCP；使用宿主已有能力，项目可另配在线后端。
+dependencies:
+  tools: []

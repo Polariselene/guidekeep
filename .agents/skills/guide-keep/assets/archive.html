@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Guidekeep · 离线攻略存照</title>
+<style>
+:root{color-scheme:light;--ink:#233a34;--paper:#f4f1e9;--line:#d6dcd2;--green:#205c46}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.7 system-ui,sans-serif}
+header,main,footer{max-width:1080px;margin:auto;padding:24px}header{padding-top:48px}h1{font-size:40px;letter-spacing:-1px;margin:0}h2{font-size:24px;margin:0 0 8px}h3{font-size:18px}p{margin:8px 0}
+.eyebrow{font-size:12px;letter-spacing:3px;color:var(--green)}.muted{color:#576b61;font-size:14px}.controls{display:grid;grid-template-columns:2fr 1fr 1fr;gap:14px;margin-top:28px}label{display:block;font-size:14px;font-weight:600}input,select{width:100%;padding:12px;border:1px solid #8b9f90;border-radius:8px;background:#fff;color:var(--ink);font:inherit}
+input:focus,select:focus,summary:focus-visible{outline:3px solid #e0ae36;outline-offset:3px}article{padding:26px;background:#fffdf8;border:1px solid var(--line);border-radius:14px;margin-bottom:22px;overflow-wrap:anywhere}.badge{display:inline-block;border:1px solid var(--line);border-radius:4px;padding:1px 8px;margin:3px 6px 3px 0;font-size:13px}.notice{padding:12px 16px;border-left:4px solid #a16a18;background:#fbf0da;margin:12px 0;white-space:pre-wrap}.event-skipped{border-color:#8b9f90;background:#eef2ed}.claim{border-left:3px solid #86a58f;padding-left:14px;margin:14px 0}a{color:var(--green);text-underline-offset:3px}summary{cursor:pointer;font-weight:600;padding:9px 0}details{border-top:1px solid var(--line);margin-top:14px}details details{margin-left:16px;padding-left:14px;border-left:2px solid var(--line)}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.7 ui-monospace,Consolas,monospace;background:#f0f2ec;padding:16px;border-radius:6px}li{margin:8px 0}.step-text{white-space:pre-wrap}figure{margin:18px 0}img{max-width:100%;height:auto;border:1px solid var(--line);border-radius:6px}figcaption{font-size:14px;color:#576b61}#count{margin:18px 0}footer{border-top:1px solid var(--line);font-size:13px}#empty{padding:36px;border:1px dashed #8b9f90;border-radius:12px}noscript{display:block;padding:20px}
+@media(max-width:700px){.controls{grid-template-columns:1fr}header,main,footer{padding:20px}header{padding-top:30px}h1{font-size:32px}article{padding:18px}}
+</style>
+</head>
+<body>
+<header>
+<div class="eyebrow">GUIDEKEEP / 存照</div>
+<h1>找得回的攻略</h1>
+<p>Because the post might not be there tomorrow.</p>
+<p class="muted">原文留档 · 按条件找路线 · 标注而不删除</p>
+<div class="controls">
+<label>全文搜索<input id="search" type="search" placeholder="搜索正文、分支条件、来源或失败原因" autocomplete="off"></label>
+<label>标签<select id="tag"><option value="">全部标签</option></select></label>
+<label>置信度<select id="confidence"><option value="">全部置信度</option><option>已核实</option><option>可能过时</option><option>存疑</option><option>无法验证</option></select></label>
+</div>
+<p id="count" role="status" aria-live="polite"></p>
+<p id="size" class="muted"></p>
+</header>
+<noscript>请启用浏览器 JavaScript 以使用内嵌归档及搜索。此文件不需要网络或服务器。</noscript>
+<main id="results"></main>
+<footer>纯静态离线归档，无联网请求。来源链接需主动打开；视频保存字幕/转录与已取得的关键帧，不含离线视频。置信度反映证据状态，不保证正确。搜索仅覆盖当前卷。</footer>
+<script id="guidekeep-data" type="application/json">[]</script>
+<script>
+'use strict';
+(() => {
+  const results = document.getElementById('results');
+  const count = document.getElementById('count');
+  const search = document.getElementById('search');
+  const tag = document.getElementById('tag');
+  const confidence = document.getElementById('confidence');
+  const el = (name, text, className) => {
+    const node = document.createElement(name);
+    if (text !== undefined && text !== null) node.textContent = String(text);
+    if (className) node.className = className;
+    return node;
+  };
+  const arr = value => Array.isArray(value) ? value : [];
+  const stageNames = {collect:'采集',structure:'结构化',verify:'查证',screenshot:'截图',archive:'归档'};
+  const statusNames = {ok:'完成',skipped:'已跳过',warning:'需留意',failed:'失败'};
+  const methodNames = {article:'图文原文',captions:'已有字幕',transcription:'音频转写'};
+  const safeLink = (url, text) => {
+    try {
+      const parsed = new URL(url);
+      if (!['https:', 'http:'].includes(parsed.protocol)) throw new Error('protocol');
+      const a = el('a', text || url);
+      a.href = parsed.href; a.target = '_blank'; a.rel = 'noopener noreferrer';
+      return a;
+    } catch { return el('span', text || url || '无链接'); }
+  };
+  const section = (root, title) => {
+    const details = el('details');
+    details.append(el('summary', title)); root.append(details); return details;
+  };
+  const list = (root, title, values) => {
+    if (!arr(values).length) return;
+    root.append(el('h3', title)); const ul = el('ul');
+    values.forEach(value => ul.append(el('li', value))); root.append(ul);
+  };
+  const step = (value) => {
+    const li = el('li'); li.dataset.stepId = value.id || '';
+    li.append(el('strong', value.title), el('div', value.instruction, 'step-text'));
+    if (arr(value.original_refs).length) li.append(el('div', '原文定位：' + value.original_refs.join('；'), 'muted'));
+    return li;
+  };
+  const image = (root, item) => {
+    if (!/^data:image\/(png|jpeg|webp);base64,[a-zA-Z0-9+/=\s]+$/.test(item.data_uri || '')) {
+      root.append(el('p', '图片未内嵌或格式不支持：' + (item.caption || ''), 'notice')); return;
+    }
+    const figure = el('figure'); const img = el('img');
+    img.src = item.data_uri; img.alt = item.caption || '归档图片'; img.loading = 'lazy';
+    figure.append(img, el('figcaption', [item.caption, item.timestamp, item.locator].filter(Boolean).join(' · ')));
+    root.append(figure);
+  };
+  let guides;
+  try {
+    guides = JSON.parse(document.getElementById('guidekeep-data').textContent);
+    if (!Array.isArray(guides) || guides.some(g => !g || typeof g !== 'object' || Array.isArray(g))) throw new Error('数据必须是攻略对象数组');
+  } catch (error) {
+    count.textContent = '归档数据读取失败'; results.append(el('p', error.message, 'notice')); return;
+  }
+  const indexed = guides.map(g => ({guide:g, text:JSON.stringify(g, (key, value) => key === 'data_uri' ? undefined : value).toLocaleLowerCase()}));
+  [...new Set(guides.flatMap(g => arr(g.tags)))].sort().forEach(value => {
+    const option = el('option', value); option.value = value; tag.append(option);
+  });
+  const size = new Blob([document.documentElement.outerHTML]).size / 1048576;
+  document.getElementById('size').textContent = '页面估算约 ' + size.toFixed(2) + ' MiB，仅供参考；分卷以交付时系统实测为准：≥20 MiB 提醒，>50 MiB 必须分卷。搜索仅覆盖当前卷。';
+  function card(g, query) {
+    const article = el('article'); article.dataset.guideId = g.id || '';
+    article.append(el('h2', g.title));
+    article.append(safeLink(g.url, g.url));
+    article.append(el('p', '抓取：' + (g.captured_at || '未知') + ' · ' + (g.kind === 'video' ? '视频' : '图文') + ' · ' + (g.mode === 'deep' ? '深查证模式' : '快速模式'), 'muted'));
+    if (g.author || g.published_at) article.append(el('p', '作者：' + (g.author || '未知') + ' · 原文时间：' + (g.published_at || '未知'), 'muted'));
+    arr(g.tags).forEach(t => article.append(el('span', t, 'badge')));
+    if (g.status !== 'success') article.append(el('p', g.status === 'failed' ? '未采集成功：仅保存元数据与失败原因。' : '部分采集：请查看缺失范围，不能视为完整快照。', 'notice'));
+    arr(g.events).filter(e => e.status !== 'ok').forEach(e => article.append(el('div', (stageNames[e.stage] || e.stage) + ' / ' + (statusNames[e.status] || e.status) + '：' + e.message + (e.at ? '\n' + e.at : ''), 'notice event-' + e.status)));
+    if (g.goal) { article.append(el('h3', '目标'), el('p', g.goal)); }
+    if (g.applicability) article.append(el('p', '适用版本：' + (arr(g.applicability.versions).join('、') || '未注明') + ' · 时间：' + (g.applicability.as_of || '未知') + ' · ' + (g.applicability.notes || ''), 'muted'));
+    list(article, '前置条件', g.prerequisites);
+    if (arr(g.steps).length) {
+      const all = section(article, '全部步骤（互斥路线请按下方条件选择）');
+      const ol = el('ol'); g.steps.forEach(s => ol.append(step(s))); all.append(ol);
+    }
+    if (arr(g.branches).length) {
+      article.append(el('h3', '按条件选择路线'));
+      const map = new Map(arr(g.steps).map(s => [s.id, s]));
+      function branch(parent, node) {
+        const d = section(parent, node.condition + ' → ' + node.label); d.className = 'branch';
+        const ol = el('ol');
+        arr(node.step_ids).forEach(id => ol.append(map.has(id) ? step(map.get(id)) : el('li', '步骤引用缺失：' + id, 'notice')));
+        d.append(ol); arr(node.children).forEach(child => branch(d, child));
+      }
+      g.branches.forEach(b => branch(article, b));
+    }
+    list(article, '坑与注意事项', g.pitfalls);
+    if (arr(g.claims).length) {
+      article.append(el('h3', '论断与置信度'));
+      g.claims.forEach(c => {
+        const block = el('div', null, 'claim');
+        block.append(el('span', c.confidence, 'badge'), el('strong', c.text), el('p', c.reason));
+        block.append(el('p', '版本：' + (c.version || '未注明') + ' · 评估日期：' + (c.checked_at || '未记录') + ' · ' + (c.origin === 'agent' ? 'Agent 补充' : '作者所述'), 'muted'));
+        arr(c.source_refs).forEach(id => {
+          const s = arr(g.sources).find(s => s.id === id);
+          if (s) { block.append(safeLink(s.url, s.title), document.createTextNode(' ')); }
+          else block.append(el('span', '来源引用缺失：' + id, 'notice'));
+        }); article.append(block);
+      });
+    }
+    if (g.original) {
+      const raw = section(article, '原文全文 · ' + g.original.filename + ' · ' + (methodNames[g.original.method] || g.original.method) + ' · ' + (g.original.completeness === 'complete' ? '完整' : '部分'));
+      list(raw, '缺失范围', g.original.missing);
+      raw.append(el('pre', g.original.text)); arr(g.original.images).forEach(i => image(raw, i));
+    }
+    if (arr(g.screenshots).length) {
+      const gallery = section(article, '深查证截图 / 关键帧'); g.screenshots.forEach(i => image(gallery, i));
+    }
+    if (arr(g.sources).length) {
+      const sources = section(article, '来源与定位');
+      g.sources.forEach(s => {
+        const p = el('p'); p.append(safeLink(s.url, s.title));
+        p.append(document.createTextNode(' · ' + s.role + ' · ' + (s.locator || '') + ' · 访问：' + (s.accessed_at || '未知'))); sources.append(p);
+      });
+    }
+    if (query) article.querySelectorAll('details').forEach(details => {
+      if (details.textContent.toLocaleLowerCase().includes(query)) details.open = true;
+    });
+    return article;
+  }
+  function render() {
+    const query = search.value.trim().toLocaleLowerCase();
+    const matches = indexed.filter(({guide:g,text}) => (!query || text.includes(query)) && (!tag.value || arr(g.tags).includes(tag.value)) && (!confidence.value || arr(g.claims).some(c => c.confidence === confidence.value)));
+    results.replaceChildren(); count.textContent = '找到 ' + matches.length + ' / ' + guides.length + ' 条攻略';
+    if (!matches.length) { const p = el('p', guides.length ? '没有匹配结果。试试清空搜索、标签或置信度筛选。' : '空归档。尚未加入任何攻略。'); p.id = 'empty'; results.append(p); }
+    matches.forEach(({guide}) => results.append(card(guide, query)));
+  }
+  search.addEventListener('input', render); tag.addEventListener('change', render); confidence.addEventListener('change', render); render();
+})();
+</script>
+</body>
+</html>

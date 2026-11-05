@@ -1,0 +1,81 @@
+# Guidekeep contains instructions, documentation and a static HTML template.
+# There is no Node.js build or bundled Python environment.
+# Dependency lock files are intentionally not ignored.
+
+# Credentials and machine-local authentication.
+# .env.example may be published only with placeholder values.
+# Ignore rules do not remove tracked files or secrets from Git history.
+.env
+.env.*
+!.env.example
+.netrc
+*.pem
+*.key
+*.p12
+*.pfx
+*.kdbx
+**/auth.json
+**/credentials.json
+**/cookies.json
+**/cookies.txt
+**/token.txt
+**/tokens.json
+**/login.png
+**/login-*.png
+**/qr.png
+**/qrcode*.png
+/.agent-reach/
+/secrets/
+/credentials/
+/.codex/auth.*
+/.codex/*.local.toml
+/.codex/sessions/
+/.codex/log/
+
+# Generated archives and collected third-party material belong outside this repo.
+/guidekeep-archive/
+/guides/
+/archive/
+/archives/
+/artifacts/
+/evidence/
+**/index.html
+**/index.html.guidekeep-pending
+**/guide.json
+**/原文快照.md
+**/字幕全文.md
+**/转录全文.md
+**/攻略.md
+**/时码索引.json
+**/截图/
+**/.guidekeep-staging*/
+
+# Local test runs, downloads and browser reports.
+/guidekeep-test-*/
+/guidekeep-readme-*/
+/guidekeep-bilibili-*/
+/guidekeep-named-folders-*/
+/test-output/
+/test-results/
+/playwright-report/
+/coverage/
+/tmp/
+/temp/
+*.tmp
+*.bak
+*.log
+
+# Development environments and editor / OS caches.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+
+# Keep the skill, template, public connection settings and test documentation visible.
+# .agents/, .codex/config.toml, assets/archive.html and TESTING.md are intentional sources.

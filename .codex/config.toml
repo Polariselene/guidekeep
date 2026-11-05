@@ -1,0 +1,5 @@
+# Project-only online reader. Authentication is handled by Codex OAuth storage.
+# Only the free Fetch tool is exposed; paid automation tools are excluded.
+[mcp_servers.guidekeep_online]
+url = "https://agent.tinyfish.ai/mcp"
+enabled_tools = ["fetch_content"]
